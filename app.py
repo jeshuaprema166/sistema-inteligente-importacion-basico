@@ -416,4 +416,304 @@ def construir_productos_desde_df(df, mapeo):
     for i, fila in df.iterrows():
         try:
             nombre = str(fila[mapeo["producto"]]).strip()
-            cantidad = int(fila[mapeo["cantidad"
+            cantidad = int(fila[mapeo["cantidad"]])
+            precio = leer_decimal(fila[mapeo["precio"]], f"precio fila {i+2}", es_dinero=True)
+            peso = leer_decimal(fila[mapeo["peso"]], f"peso fila {i+2}", permitir_cero=False)
+            volumen = leer_decimal(fila[mapeo["volumen"]], f"volumen fila {i+2}", permitir_cero=False)
+            
+            # --- NUEVOS DATOS DEL SEMÁFORO ---
+            stock = int(fila[mapeo["stock"]])
+            ventas = int(fila[mapeo["ventas"]])
+            dias = int(fila[mapeo["dias"]])
+            
+        except (ValueError, TypeError) as e:
+            raise ValueError(f"Fila {i+2}: {e}")
+            
+        if not nombre or cantidad <= 0:
+            raise ValueError(f"Fila {i+2}: nombre vacío o cantidad inválida.")
+            
+        productos.append({
+            "nombre": nombre, 
+            "cantidad": cantidad, 
+            "precio_china": precio,
+            "peso_total": peso * cantidad, 
+            "volumen_total": volumen * cantidad, 
+            "gastos": {},
+            # --- GUARDAMOS EL SEMÁFORO ---
+            "stock_actual": stock,
+            "ventas_semanales": ventas,
+            "dias_entrega": dias
+        })
+    return productos
+
+def panel_gastos(prefix=""):
+    st.subheader("Gastos de arribo del contenedor")
+    datos = {}
+    for i in range(0, len(GASTOS_CONTENEDOR), 2):
+        cols = st.columns(2)
+        for col, (nombre_gasto, criterio) in zip(cols, GASTOS_CONTENEDOR[i:i+2]):
+            datos[nombre_gasto] = col.text_input(f"{nombre_gasto} ({criterio}) · total ($)", value="0.00", key=f"{prefix}gasto_{nombre_gasto}")
+    return datos
+
+def validar_gastos(datos_gastos):
+    gastos = {}
+    errores = []
+    for nombre_gasto, _ in GASTOS_CONTENEDOR:
+        try:
+            gastos[nombre_gasto] = leer_decimal(datos_gastos[nombre_gasto], f"gasto {nombre_gasto}", es_dinero=True)
+        except ValueError as e:
+            errores.append(str(e))
+    return gastos, errores
+
+def generar_pdf(productos, gastos_contenedor, config):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_auto_page_break(auto=True, margin=15)
+    
+    # --- ENCABEZADO CORPORATIVO MEJORADO ---
+    pdf.set_font("Helvetica", "B", 15)
+    pdf.set_text_color(31, 73, 125)
+    pdf.cell(0, 10, "REPORTE EJECUTIVO DE IMPORTACIÓN", align="C")
+    pdf.ln(10)
+    
+    # Empresa en grande
+    pdf.set_font("Helvetica", "B", 12)
+    pdf.set_text_color(31, 73, 125) # Azul corporativo
+    pdf.cell(0, 6, f"{config['empresa']}", align="C")
+    pdf.ln(6)
+    
+    # RIF y Propietario en la línea de abajo (un poco más pequeños)
+    pdf.set_font("Helvetica", "", 10)
+    pdf.set_text_color(50, 50, 50)
+    pdf.cell(0, 5, f"RIF: {config['rif']}  |  Propietario: {config['propietario']}", align="C")
+    pdf.ln(7)
+    
+    # Datos de Origen en el PDF (Destacados en Negrita)
+    pdf.set_font("Helvetica", "B", 10) # Negrita y tamaño 10
+    pdf.set_text_color(50, 50, 50) # Gris oscuro para que resalte
+    prov_corto = str(config.get('proveedor', 'N/A'))[:40]
+    pdf.cell(0, 5, f"Origen: {config.get('origen', 'N/A')}  |  Proveedor: {prov_corto}  |  Factura: {config.get('factura', 'N/A')}", align="C")
+    pdf.ln(12) 
+    pdf.set_text_color(50, 50, 50) # Volver al color normal para las tarjetas de abajo 
+    
+    # --- TARJETAS KPIs SUPERIORES ---
+    total_unidades = sum(p["cantidad"] for p in productos)
+    gasto_total_contenedor = sum(sum(p["gastos"].values()) for p in productos)
+    costo_total_fob = sum(p["precio_china"] * p["cantidad"] for p in productos)
+    
+    pdf.set_fill_color(245, 247, 250)
+    pdf.set_draw_color(200, 200, 200)
+    
+    w_kpi = 44
+    pdf.set_font("Helvetica", "B", 8)
+    pdf.set_text_color(100, 100, 100)
+    
+    pdf.cell(w_kpi, 5, "PRODUCTOS", border="LRT", align="C", fill=True)
+    pdf.cell(2, 5, "")
+    pdf.cell(w_kpi, 5, "CANT. UNIDADES", border="LRT", align="C", fill=True)
+    pdf.cell(2, 5, "")
+    pdf.cell(w_kpi, 5, "COSTO MERCANCÍA", border="LRT", align="C", fill=True)
+    pdf.cell(2, 5, "")
+    pdf.cell(w_kpi, 5, "GASTOS ARRIBO", border="LRT", align="C", fill=True)
+    pdf.ln(5)
+    
+    pdf.set_font("Helvetica", "B", 11)
+    pdf.set_text_color(31, 73, 125)
+    pdf.cell(w_kpi, 8, f"{len(productos)} items", border="LRB", align="C", fill=True)
+    pdf.cell(2, 8, "")
+    pdf.cell(w_kpi, 8, f"{total_unidades:,} unds", border="LRB", align="C", fill=True)
+    pdf.cell(2, 8, "")
+    pdf.cell(w_kpi, 8, f"$ {costo_total_fob:,.2f}", border="LRB", align="C", fill=True)
+    pdf.cell(2, 8, "")
+    pdf.cell(w_kpi, 8, f"$ {gasto_total_contenedor:,.2f}", border="LRB", align="C", fill=True)
+    pdf.ln(15)
+    
+    # --- TABLA RESUMEN GENERAL ---
+    pdf.set_font("Helvetica", "B", 11)
+    pdf.set_text_color(31, 73, 125)
+    pdf.cell(0, 8, "Resumen General de Costos y Precios de Venta")
+    pdf.ln(8)
+    
+    pdf.set_font("Helvetica", "B", 8)
+    pdf.set_text_color(255, 255, 255)
+    pdf.set_fill_color(31, 73, 125)
+    
+    pdf.cell(50, 7, " Producto", border=1, fill=True)
+    pdf.cell(18, 7, "Cant.", border=1, align="C", fill=True)
+    pdf.cell(24, 7, "Costo U.", border=1, align="C", fill=True)
+    pdf.cell(24, 7, "PVP Norm.", border=1, align="C", fill=True)
+    pdf.cell(24, 7, "PVP May.", border=1, align="C", fill=True)
+    pdf.cell(24, 7, "PVP Esp.", border=1, align="C", fill=True)
+    pdf.cell(26, 7, "Semáforo", border=1, align="C", fill=True)
+    pdf.ln(7)
+    
+    pdf.set_font("Helvetica", "", 8)
+    
+    for p in productos:
+        color, mensaje, sug_ahora, sug_futuro, riesgo = evaluar_semaforo(
+            p.get("stock_actual", 0), 
+            p.get("ventas_semanales", 0), 
+            p.get("dias_entrega", 0),
+            config.get("fecha_proximo_pedido")
+        )
+        
+        # Determinar texto y color RGB para la tabla resumen
+        if "🔴" in color:
+            txt_semaforo = "ROJO"
+            r_col, g_col, b_col = 200, 0, 0
+        elif "🟠" in color:
+            txt_semaforo = "NARANJA"
+            r_col, g_col, b_col = 220, 130, 0
+        else:
+            txt_semaforo = "VERDE"
+            r_col, g_col, b_col = 0, 150, 0
+            
+        pdf.set_text_color(40, 40, 40)
+        pdf.cell(50, 6, f" {p['nombre'][:25]}", border=1)
+        pdf.cell(18, 6, f"{p['cantidad']}", border=1, align="C")
+        pdf.cell(24, 6, f"$ {p['costo_unitario']:.2f}", border=1, align="C")
+        pdf.cell(24, 6, f"$ {p['pvp_normal']:.2f}", border=1, align="C")
+        pdf.cell(24, 6, f"$ {p['pvp_mayorista']:.2f}", border=1, align="C")
+        pdf.cell(24, 6, f"$ {p['pvp_especial']:.2f}", border=1, align="C")
+        
+        # Pintar el texto del semáforo con su color correspondiente
+        pdf.set_text_color(r_col, g_col, b_col)
+        pdf.cell(26, 6, f"{txt_semaforo}", border=1, align="C")
+        pdf.ln(6)
+        
+    pdf.ln(10)
+    
+    # --- DESGLOSE DETALLADO POR PRODUCTO ---
+    pdf.set_font("Helvetica", "B", 11)
+    pdf.set_text_color(31, 73, 125)
+    pdf.cell(0, 8, "Desglose Individual y Prorrateo de Gastos")
+    pdf.ln(8)
+    
+    for p in productos:
+        color, mensaje, sug_ahora, sug_futuro, riesgo = evaluar_semaforo(
+            p.get("stock_actual", 0), 
+            p.get("ventas_semanales", 0), 
+            p.get("dias_entrega", 0),
+            config.get("fecha_proximo_pedido")
+        )
+        
+        if "🔴" in color:
+            txt_semaforo = "ROJO"
+            r_col, g_col, b_col = 200, 0, 0
+        elif "🟠" in color:
+            txt_semaforo = "NARANJA"
+            r_col, g_col, b_col = 220, 130, 0
+        else:
+            txt_semaforo = "VERDE"
+            r_col, g_col, b_col = 0, 150, 0
+        
+        pdf.set_font("Helvetica", "B", 9)
+        pdf.set_fill_color(230, 240, 250)
+        pdf.set_text_color(31, 73, 125)
+        pdf.cell(0, 7, f"  Producto: {p['nombre']}", border=1, fill=True)
+        pdf.ln(7)
+        
+        # Imprimir Estado con su color específico
+        pdf.set_font("Helvetica", "B", 8)
+        pdf.set_text_color(50, 50, 50)
+        pdf.cell(35, 5, "  Estado de Alerta:", border="L")
+        
+        pdf.set_text_color(r_col, g_col, b_col)
+        pdf.cell(130, 5, f"{txt_semaforo} - {mensaje}", border="") # Aquí va la alerta
+        
+        # --- EL NUEVO TEXTO DEL PEDIR, RESALTADO ---
+        pdf.set_font("Helvetica", "B", 10) 
+        pdf.set_text_color(200, 0, 0)      
+        pdf.cell(25, 5, f"=====> (Pedir: {sug_ahora} unds)", border="R", align="R") 
+        
+        pdf.ln(5) # <--- Aquí bajamos la línea para la planificación
+        
+        if sug_futuro > 0 and config.get("fecha_proximo_pedido"):
+            pdf.set_font("Helvetica", "BI", 9)
+            pdf.set_text_color(100, 100, 100)
+            pdf.cell(0, 5, f"  Planificación para el {config['fecha_proximo_pedido']}: Pedir {sug_futuro} unds", border="LR", align="R")
+            pdf.ln(5) 
+            pdf.set_font("Helvetica", "B", 8.5)
+        
+        # --- DATOS FÍSICOS (CANTIDAD Y GASTOS) ---
+        pdf.set_text_color(50, 50, 50)
+        
+        info_izq = f"Cant.: {p['cantidad']} unds | P. China U.: $ {p['precio_china']:.2f} | Peso T.: {p['peso_total']:.2f} kg | Vol. T.: {p['volumen_total']:.4f} m3"
+        info_der = f"Gastos Arribo U.: $ {p['gasto_unitario']:.2f} | COSTO REAL EN ESTANTE: $ {p['costo_unitario']:.2f}"
+        
+        pdf.cell(0, 5, f"  {info_izq}", border="LR")
+        pdf.ln(5)
+        pdf.set_font("Helvetica", "B", 8)
+        pdf.cell(0, 5, f"  {info_der}", border="LR")
+        pdf.ln(5)   
+        
+        # --- DIVIDIR GASTOS ASIGNADOS EN DOS LÍNEAS ---
+        gastos_items = list(p["gastos"].items())
+        mitad = (len(gastos_items) + 1) // 2
+        linea_1 = " | ".join([f"{k}: $ {v:.2f}" for k, v in gastos_items[:mitad]])
+        linea_2 = " | ".join([f"{k}: $ {v:.2f}" for k, v in gastos_items[mitad:]])
+        
+        pdf.set_font("Helvetica", "I", 7.5)
+        pdf.cell(0, 4.5, f"  Gastos (Parte 1): {linea_1}", border="LR")
+        pdf.ln(4.5)
+        pdf.cell(0, 4.5, f"  Gastos (Parte 2): {linea_2}", border="LRB")
+        pdf.ln(8)
+        
+    pdf.ln(5)
+    
+    # --- FICHA DEL ASESOR DE IMPORTACIÓN EN EL PDF ---
+    try:
+        # Si el cursor está muy abajo (a menos de 30mm del final), creamos una página nueva
+        if pdf.get_y() > 250:
+            pdf.add_page()
+    
+        pdf.ln(5) # Separación de la tabla de arriba
+        y_ficha = pdf.get_y()
+        
+        # Dibujamos el recuadro contenedor
+        pdf.set_fill_color(240, 245, 250)
+        pdf.set_draw_color(31, 73, 125)
+        pdf.rect(10, y_ficha, 190, 26, style="DF")
+        
+        # Insertamos la foto un poquito más abajo para que quede centrada en el recuadro
+        if os.path.exists("profesor.jpg"):
+            try:
+                pdf.image("profesor.jpg", x=12, y=y_ficha + 3, w=20)
+            except Exception:
+                pass
+                
+        # Escribimos el texto a la derecha de la foto (x=35)
+        pdf.set_xy(35, y_ficha + 2)
+        pdf.set_font("Helvetica", "B", 9)
+        pdf.set_text_color(31, 73, 125)
+        pdf.cell(0, 4, "Diseñado y elaborado por su Asesor de Importación Inteligente:")
+        pdf.ln(4)
+        
+        pdf.set_x(35)
+        pdf.set_font("Helvetica", "B", 10)
+        pdf.set_text_color(0, 0, 0)
+        pdf.cell(0, 5, "Prof. Jesús Pulido V.")
+        pdf.ln(5)
+        
+        pdf.set_x(35)
+        pdf.set_font("Helvetica", "", 8)
+        pdf.set_text_color(80, 80, 80)
+        pdf.cell(0, 4, "Teléfonos de contacto: 0424-728.3199 / 0416-291.6426  |  Correo: jeshua166@gmail.com")
+        pdf.ln(4)
+        
+        pdf.set_x(35)
+        pdf.cell(0, 4, "Ubicación: Santa Bárbara de Barinas, Venezuela")
+    except Exception:
+        pass
+    
+    output = pdf.output()
+    if isinstance(output, str):
+        return output.encode("latin1")
+    return bytes(output)
+
+
+
+
+
+
+
