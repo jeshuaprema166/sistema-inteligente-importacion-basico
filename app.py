@@ -711,7 +711,359 @@ def generar_pdf(productos, gastos_contenedor, config):
         return output.encode("latin1")
     return bytes(output)
 
+def mostrar_resultado(productos, gastos_contenedor, config):
+    st.success("✅ Reporte generado correctamente.")
+    
+    # 1. INYECCIÓN DE ESTILOS CSS (Para las tarjetas de lujo)
+    st.markdown("""
+    <style>
+        .kpi-container {
+            background-color: #ffffff;
+            border-radius: 12px;
+            padding: 20px;
+            border-left: 6px solid #1f497d;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.08);
+            text-align: center;
+            margin-bottom: 15px;
+        }
+        .kpi-title {
+            font-size: 0.9rem;
+            color: #555555;
+            font-weight: 600;
+            text-transform: uppercase;
+            margin-bottom: 5px;
+        }
+        .kpi-value {
+            font-size: 1.8rem;
+            color: #1f497d;
+            font-weight: 800;
+        }
+        .header-box {
+            text-align: center;
+            background-color: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            border-bottom: 3px solid #1f497d;
+        }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    # 2. ENCABEZADO PRINCIPAL (Centrado y con fondo)
+    st.markdown(f"""
+    <div class="header-box">
+        <h1 style='color: #1f497d; margin: 0;'>📊 REPORTE EJECUTIVO DE IMPORTACIÓN</h1>
+        <p style='color: #666666; font-size: 1.1rem; margin-top: 10px;'>
+            <b>{config['empresa']}</b> | RIF: {config['rif']} | Propietario: {config['propietario']}
+        </p>
+        <p style='color: #333333; font-size: 1rem; margin-top: 5px; background-color: #e8f4f8; display: inline-block; padding: 5px 15px; border-radius: 20px;'>
+            <b>Origen:</b> {config.get('origen', 'N/A')} &nbsp;|&nbsp; 
+            <b>Proveedor:</b> {config.get('proveedor', 'N/A')} &nbsp;|&nbsp; 
+            <b>Factura N°:</b> {config.get('factura', 'N/A')}
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # 3. CÁLCULOS Y TARJETAS KPI (Alineadas en 4 columnas)
+    total_unidades = sum(p["cantidad"] for p in productos)
+    gasto_total_contenedor = sum(sum(p["gastos"].values()) for p in productos)
+    costo_total_fob = sum(p["precio_china"] * p["cantidad"] for p in productos)
+    
+    col_kpi1, col_kpi2, col_kpi3, col_kpi4 = st.columns(4)
+    
+    with col_kpi1:
+        st.markdown(f'''
+        <div class="kpi-container">
+            <div class="kpi-title">📦 Productos</div>
+            <div class="kpi-value">{len(productos)} ítems</div>
+        </div>
+        ''', unsafe_allow_html=True)
+    
+    with col_kpi2:
+        st.markdown(f'''
+        <div class="kpi-container">
+            <div class="kpi-title">🔢 Cant. Unidades</div>
+            <div class="kpi-value">{total_unidades:,} unds</div>
+        </div>
+        ''', unsafe_allow_html=True)
+    
+    with col_kpi3:
+        st.markdown(f'''
+        <div class="kpi-container">
+            <div class="kpi-title">💰 Costo Mercancía</div>
+            <div class="kpi-value">{formato_dinero(costo_total_fob)}</div>
+        </div>
+        ''', unsafe_allow_html=True)
+    
+    with col_kpi4:
+        st.markdown(f'''
+        <div class="kpi-container">
+            <div class="kpi-title">🚢 Gastos Arribo</div>
+            <div class="kpi-value">{formato_dinero(gasto_total_contenedor)}</div>
+        </div>
+        ''', unsafe_allow_html=True)
+    
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    # 4. TÍTULO DE LA TABLA RESUMEN
+    st.markdown("<h4 style='color: #1f497d;'>📋 Resumen General de Costos y Precios de Venta</h4>", unsafe_allow_html=True)
 
+    datos_resumen = []
+    for p in productos:
+        color, mensaje, sug_ahora, sug_futuro, riesgo = evaluar_semaforo(
+            p.get("stock_actual", 0), 
+            p.get("ventas_semanales", 0), 
+            p.get("dias_entrega", 0),
+            config.get("fecha_proximo_pedido")
+        )
+        datos_resumen.append({
+            "Producto": p["nombre"],
+            "Cant.": p["cantidad"],
+            "Costo U.": f"$ {p['costo_unitario']:.2f}",
+            "PVP Normal": f"$ {p['pvp_normal']:.2f}",
+            "PVP Mayorista": f"$ {p['pvp_mayorista']:.2f}",
+            "PVP Especial": f"$ {p['pvp_especial']:.2f}",
+            "SemáforoIA": f"{color} {mensaje}",
+            "Pedir (Unds)": sug_ahora
+        })
+
+    df_resumen = pd.DataFrame(datos_resumen)
+    st.dataframe(df_resumen, use_container_width=True, hide_index=True)
+
+    st.markdown("---")
+
+    # 5. DESGLOSE DETALLADO POR PRODUCTO (ACORDEONES / EXPANDERS)
+    st.markdown("<h4 style='color: #1f497d;'>🔍 Desglose Individual y Prorrateo</h4>", unsafe_allow_html=True)
+
+    for i, p in enumerate(productos, start=1):
+        # 1. Cálculos previos para el acordeón
+        color, mensaje, sug_ahora, sug_futuro, riesgo = evaluar_semaforo(
+            p.get("stock_actual", 0), 
+            p.get("ventas_semanales", 0), 
+            p.get("dias_entrega", 0),
+            config.get("fecha_proximo_pedido")
+        )
+        
+        titulo_expander = f"📦 {p['nombre']} | {color} {mensaje} (Pedir: {sug_ahora} unds)"
+        
+        # 2. AQUÍ SE ABRE EL ACORDEÓN
+        with st.expander(titulo_expander, expanded=(i == 1)):
+            
+            # 3. MÉTRICAS (Datos Físicos y Precios)
+            c_left, c_right = st.columns(2)
+            with c_left:
+                st.markdown("##### 📌 Datos Físicos y de Origen")
+                st.metric(label="Cantidad de Unidades", value=f"{p['cantidad']:,} unds")
+                st.metric(label="Precio Origen (Unidad)", value=f"$ {p['precio_china']:.2f}")
+                st.metric(label="Peso Total", value=f"{p['peso_total']:.2f} kg")
+                st.metric(label="Volumen Total", value=f"{p['volumen_total']:.3f} m³")
+                
+            with c_right:
+                st.markdown("##### 🏷️ Costo Real y Precios Sugeridos")
+                st.metric(label="COSTO REAL EN ESTANTE", value=f"$ {p['costo_unitario']:.2f}", delta=f"FOB: $ {p['precio_china']:.2f}", delta_color="off")
+                st.metric(label="PVP Normal (Sugerido)", value=f"$ {p['pvp_normal']:.2f}")
+                st.metric(label="PVP Mayorista", value=f"$ {p['pvp_mayorista']:.2f}")
+                st.metric(label="PVP Especial", value=f"$ {p['pvp_especial']:.2f}")
+
+            st.markdown("---")
+
+            # 4. GASTOS DE ARRIBO (Prorrateo)
+            st.markdown("##### 🚢 Gastos de Arribo Asignados (Prorrateo)")
+            g_col1, g_col2, g_col3 = st.columns(3)
+            gastos_items = list(p["gastos"].items())
+            
+            for idx, (nombre_gasto, monto_asig) in enumerate(gastos_items):
+                por_und = monto_asig / p["cantidad"]
+                col_target = g_col1 if idx % 3 == 0 else (g_col2 if idx % 3 == 1 else g_col3)
+                col_target.metric(
+                    label=nombre_gasto,
+                    value=formato_dinero(monto_asig),
+                    delta=f"{formato_dinero(por_und)} /und",
+                    delta_color="off"
+                )
+
+            st.markdown("---")
+
+            # 5. ALERTAS DEL SEMÁFORO
+            if color == "🔴":
+                st.error(f"🚨 **Alerta de Reposición (IA):** {mensaje}. Se sugiere pedir **{sug_ahora}** unidades AHORA.")
+            elif color == "🟡":
+                st.warning(f"⚠️ **Alerta de Reposición (IA):** {mensaje}. Se sugiere pedir **{sug_ahora}** unidades pronto.")
+            else:
+                st.success(f"🟢 **Estado de Inventario:** {mensaje}. No requiere reposición por el momento.")
+    
+            # --- NUEVO: ALERTA DE FECHA FUTURA (Si aplica) ---
+            if sug_futuro > 0 and config.get("fecha_proximo_pedido"):
+                st.info(f"📅 **Planificación:** Para el pedido del {config['fecha_proximo_pedido']}, se sugieren **{sug_futuro}** unidades.")
+                
+            if riesgo:
+                st.warning("⚠️ **ALERTA CRÍTICA:** Este producto se agota antes del próximo pedido. Considere comprar al proveedor local.")
+
+            # 6. ALERTAS DE CARGA PESADA (ANEXO C)
+            color_carga, mensaje_carga, _ = evaluar_carga_pesada(p)
+            if "🔴" in color_carga:
+                st.error(f"⚖️ **Análisis de Carga Pesada:** {mensaje_carga}")
+            elif "🟡" in color_carga:
+                st.warning(f"⚖️ **Análisis de Carga Pesada:** {mensaje_carga}")
+            else:
+                st.success(f"⚖️ **Análisis de Carga Pesada:** {mensaje_carga}")
+
+    st.markdown("---")
+
+    # 5.5. FICHA DEL ASESOR DE IMPORTACIÓN
+    col_foto, col_datos = st.columns([1, 4])
+    with col_foto:
+        if os.path.exists("profesor.jpg"):
+            st.image("profesor.jpg", width=110)
+        else:
+            st.markdown("📸 **Prof. Jesús Pulido V.**")
+
+    with col_datos:
+        st.markdown("""
+        <div style='background-color: #f0f4f8; padding: 12px; border-radius: 6px; border-left: 4px solid #1f497d;'>
+        <h5 style='color: #1f497d; margin:0;'>Diseñado y elaborado por su Asesor de Importación Inteligente</h5>
+        <h4 style='color: #111111; margin:4px 0;'>Prof. Jesús Pulido V.</h4>
+        <p style='margin:2px 0; font-size:0.85rem; color:#444;'>📞 Teléfonos de contacto: 0424-728.3199 / 0416-291.6426</p>
+        <p style='margin:2px 0; font-size:0.85rem; color:#444;'>✉️ Correo: jeshua166@gmail.com</p>
+        <p style='margin:2px 0; font-size:0.85rem; color:#666;'>📍 Ubicación: Santa Bárbara de Barinas, Venezuela</p>
+        </div>
+        """, unsafe_allow_html=True)
+
+    st.markdown("")
+
+    # 6. ACCIONES Y DESCARGAS
+    col_btn1, col_btn2 = st.columns(2)
+    with col_btn1:
+        reporte_texto = crear_reporte(productos, gastos_contenedor, config)
+        st.download_button(
+            label="📥 Descargar Reporte en Texto (.txt)",
+            data=reporte_texto,
+            file_name=f"Reporte_Importacion_{config['empresa']}.txt",
+            mime="text/plain",
+            use_container_width=True
+        )
+    with col_btn2:
+        try:
+            pdf_data = generar_pdf(productos, gastos_contenedor, config)
+            st.download_button(
+                label="📄 Descargar Reporte Ejecutivo (PDF)",
+                data=pdf_data,
+                file_name=f"Reporte_Importacion_{config['empresa']}.pdf",
+                mime="application/pdf",
+                use_container_width=True
+            )
+        except Exception as e:
+            st.error(f"❌ Error al generar PDF: {str(e)}")
+
+    
+def main():
+    st.set_page_config(page_title="Costos de Importación | Los Mangos", page_icon="📋", layout="wide")
+    inicializar_estado()
+    config = panel_configuracion()
+    st.title(config["empresa"])
+    st.caption(f"RIF: {config['rif']}  ·  Propietario: {config['propietario']}")
+    st.header("Sistema de costos de importación")
+
+    tab_manual, tab_excel = st.tabs(["Opción A · Ingreso manual", "Opción B · Desde Excel"])
+
+    with tab_manual:
+        cantidad_productos = st.number_input("Cantidad de productos diferentes", min_value=1, max_value=50, value=3, step=1)
+        with st.form("form_manual"):
+            st.subheader("Productos del contenedor")
+            datos_productos = []
+            for i in range(int(cantidad_productos)):
+                st.markdown(f"**Producto {i+1}**")
+                c1, c2 = st.columns(2)
+                nombre = c1.text_input("Nombre del producto", key=f"n_{i}", placeholder="Ej.: Taladro")
+                cantidad = c2.number_input("Cantidad", min_value=1, value=1, step=1, key=f"c_{i}")
+                c3, c4, c5 = st.columns(3)
+                precio = c3.text_input("Precio China ($)", key=f"p_{i}", placeholder="Ej.: 35.00")
+                peso = c4.text_input("Peso unitario (kg)", key=f"pe_{i}", placeholder="Ej.: 3")
+                vol = c5.text_input("Volumen unitario (m³)", key=f"v_{i}", placeholder="Ej.: 0.008")
+                st.markdown("**Datos para el Semáforo 🚥**")
+                c6, c7, c8 = st.columns(3)
+                stock_actual = c6.number_input("Stock actual (unidades)", min_value=0, value=0, step=1, key=f"s_{i}")
+                ventas_semanales = c7.number_input("Ventas por semana", min_value=0, value=0, step=1, key=f"vs_{i}")
+                dias_entrega = c8.number_input("Días de entrega", min_value=1, value=60, step=1, key=f"d_{i}")
+            
+                datos_productos.append({
+                "nombre": nombre, "cantidad": int(cantidad), 
+                "precio": precio, "peso": peso, "volumen": vol,
+                "stock_actual": int(stock_actual),
+                "ventas_semanales": int(ventas_semanales),
+                "dias_entrega": int(dias_entrega)
+            })
+            datos_gastos = panel_gastos(prefix="manual_")
+            submit = st.form_submit_button("Calcular costos y generar reporte", type="primary", use_container_width=True)
+  
+        if submit:
+            errores = []
+            productos = []
+            for i, d in enumerate(datos_productos, start=1):
+                try:
+                    nombre = d["nombre"].strip()
+                    if not nombre: raise ValueError(f"Indica el nombre del producto {i}.")
+                    precio = leer_decimal(d["precio"], f"precio producto {i}", es_dinero=True)
+                    peso = leer_decimal(d["peso"], f"peso producto {i}", permitir_cero=False)
+                    vol = leer_decimal(d["volumen"], f"volumen producto {i}", permitir_cero=False)
+                    cantidad = d["cantidad"]
+                    productos.append({
+                    "nombre": nombre, "cantidad": cantidad,
+                    "precio_china": precio,
+                    "peso_total": peso * cantidad,
+                    "volumen_total": vol * cantidad,
+                    "gastos": {},
+                    "stock_actual": d["stock_actual"],
+                    "ventas_semanales": d["ventas_semanales"],
+                    "dias_entrega": d["dias_entrega"]
+                })
+                except ValueError as e:
+                    errores.append(str(e))
+            gastos, errores_g = validar_gastos(datos_gastos)
+            errores.extend(errores_g)
+            if errores:
+                for e in errores: st.error(e)
+            else:
+                gastos_contenedor = calcular_costos(productos, gastos, config)
+                mostrar_resultado(productos, gastos_contenedor, config)
+
+    with tab_excel:
+        st.write("Sube un archivo Excel (.xlsx) o CSV con tu inventario.")
+        archivo = st.file_uploader("Archivo de inventario", type=["xlsx", "csv"])
+        if archivo is None:
+            st.info("Esperando archivo...")
+        else:
+            try:
+                df = leer_excel(archivo)
+            except Exception as e:
+                st.error(f"No se pudo leer el archivo: {e}")
+                return
+            st.success(f"Archivo cargado: {len(df)} filas, {len(df.columns)} columnas.")
+            with st.expander("Vista previa del archivo"):
+                st.dataframe(df.head(10))
+            mapeo = mapear_columnas(df)
+            datos_gastos = panel_gastos(prefix="excel_")
+            if st.button("Calcular costos y generar reporte", type="primary", use_container_width=True):
+                errores = []
+                try:
+                    productos = construir_productos_desde_df(df, mapeo)
+                except ValueError as e:
+                    errores.append(str(e))
+                gastos, errores_g = validar_gastos(datos_gastos)
+                errores.extend(errores_g)
+                if errores:
+                    for e in errores: st.error(e)
+                else:
+                    gastos_contenedor = calcular_costos(productos, gastos, config)
+                    mostrar_resultado(productos, gastos_contenedor, config)
+
+if __name__ == "__main__":
+    # Verificamos la contraseña antes de mostrar la app
+    if verificar_acceso():
+        if st.sidebar.button("🚪 Cerrar Sesión"):
+            st.session_state["autenticado"] = False
+            st.rerun()
+        main()
 
 
 
