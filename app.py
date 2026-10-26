@@ -30,10 +30,11 @@ def verificar_acceso():
     
     # Texto destacado
     st.markdown("""
-    <div style="background-color: #e8f4f8; padding: 15px; border-radius: 5px; text-align: center; border-left: 5px solid #2196F3; margin-top: 20px; margin-bottom: 20px;">
+    <div style="background-color: #e8f4f8; color: #0b2545; padding: 15px; border-radius: 5px; text-align: center; border-left: 5px solid #2196F3; margin-top: 20px; margin-bottom: 20px;">
     <strong>"UN SISTEMA DE COMERCIALIZACIÓN DISEÑADO PARA PROTEGER SU CAPITAL Y ASEGURAR QUE EL NEGOCIO SIEMPRE CREZCA"</strong>
     </div>
     """, unsafe_allow_html=True)
+    
     
     st.markdown("<span style='font-size: 1.5em; white-space: nowrap;'>**Instrucciones:**</span>", unsafe_allow_html=True)
     st.markdown("1. Una vez dentro, vaya al menú desplegable de la izquierda (⏪) para configurar los **Datos de su empresa**: Razón Social (Nombre de la Empresa), RIF y Propietario; márgenes (%) de utilidad y descuentos previstos. **Datos de la Empresa Origen**: País, Nombre de la Empresa, Nro de factura.")
