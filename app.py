@@ -754,8 +754,9 @@ def mostrar_resultado(productos, gastos_contenedor, config):
     st.markdown(f"""
     <div class="header-box">
         <h1 style='color: #1f497d; margin: 0;'>📊 REPORTE EJECUTIVO DE IMPORTACIÓN</h1>
-        <p style='color: #666666; font-size: 1.1rem; margin-top: 10px;'>
-            <b>{config['empresa']}</b> | RIF: {config['rif']} | Propietario: {config['propietario']}
+        <h2 style='color: #1f497d; margin-top: 15px; margin-bottom: 5px;'>{config['empresa']}</h2>
+        <p style='color: #666666; font-size: 1.0rem; margin-top: 0;'>
+            RIF: {config['rif']} | Propietario: {config['propietario']}
         </p>
         <p style='color: #333333; font-size: 1rem; margin-top: 5px; background-color: #e8f4f8; display: inline-block; padding: 5px 15px; border-radius: 20px;'>
             <b>Origen:</b> {config.get('origen', 'N/A')} &nbsp;|&nbsp; 
@@ -895,7 +896,7 @@ def mostrar_resultado(productos, gastos_contenedor, config):
     
             # --- NUEVO: ALERTA DE FECHA FUTURA (Si aplica) ---
             if sug_futuro > 0 and config.get("fecha_proximo_pedido"):
-                st.info(f"📅 **Planificación:** Para el pedido del {config['fecha_proximo_pedido']}, se sugieren **{sug_futuro}** unidades.")
+                st.info(f"🗓️ Para el **Pedido Planificado** del {config['fecha_proximo_pedido']}, se sugieren {sug_futuro} Unds.")
                 
             if riesgo:
                 st.warning("⚠️ **ALERTA CRÍTICA:** Este producto se agota antes del próximo pedido. Considere comprar al proveedor local.")
