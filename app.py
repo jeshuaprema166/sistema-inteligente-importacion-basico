@@ -752,24 +752,13 @@ def mostrar_resultado(productos, gastos_contenedor, config):
     
     # 2. ENCABEZADO PRINCIPAL (Centrado y con fondo)
     st.markdown(f"""
-    <div class="header-box">
-        <h1 style='color: #1f497d; margin: 0; font-size: 2rem;'>📊 REPORTE EJECUTIVO DE IMPORTACIÓN</h1>
-        
-        <h3 style='color: #1f497d; margin-top: 15px; margin-bottom: 5px; font-size: 1.4rem;'>
-            {config['empresa']}
-        </h3>
-        
-        <p style='color: #444444; font-size: 1rem; margin-top: 0;'>
-            <b>RIF:</b> {config['rif']} &nbsp;|&nbsp; <b>Propietario:</b> {config['propietario']}
-        </p>
-        
-        <p style='color: #333333; font-size: 1rem; margin-top: 10px; background-color: #e8f4f8; display: inline-block; padding: 5px 15px; border-radius: 20px;'>
-            <b>Origen:</b> {config.get('origen', 'N/A')} &nbsp;|&nbsp; 
-            <b>Proveedor:</b> {config.get('proveedor', 'N/A')} &nbsp;|&nbsp; 
-            <b>Factura N°:</b> {config.get('factura', 'N/A')}
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
+<div class="header-box">
+<h1 style='color: #1f497d; margin: 0; font-size: 2rem;'>📊 REPORTE EJECUTIVO DE IMPORTACIÓN</h1>
+<h3 style='color: #1f497d; margin-top: 15px; margin-bottom: 5px; font-size: 1.4rem;'>{config['empresa']}</h3>
+<p style='color: #444444; font-size: 1rem; margin-top: 0;'><b>RIF:</b> {config['rif']} &nbsp;|&nbsp; <b>Propietario:</b> {config['propietario']}</p>
+<p style='color: #333333; font-size: 1rem; margin-top: 10px; background-color: #e8f4f8; display: inline-block; padding: 5px 15px; border-radius: 20px;'><b>Origen:</b> {config.get('origen', 'N/A')} &nbsp;|&nbsp; <b>Proveedor:</b> {config.get('proveedor', 'N/A')} &nbsp;|&nbsp; <b>Factura N°:</b> {config.get('factura', 'N/A')}</p>
+</div>
+""", unsafe_allow_html=True)
     
     # 3. CÁLCULOS Y TARJETAS KPI (Alineadas en 4 columnas)
     total_unidades = sum(p["cantidad"] for p in productos)
