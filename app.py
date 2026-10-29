@@ -25,6 +25,7 @@ def verificar_acceso():
     * **Alarmas** de reposición de inventario 🟢🟡🔴 por IA, que permiten monitorear el comportamiento de las existencias, previniendo el desabastecimiento o sobrecompra, que redunda en estancamiento del Capital económico.
     * **Ingresar** de forma **automática** de **TODOS** los datos y detalles del Excel de sus artículos del inventario al Sistema de Análisis Inteligente de Importación.
     * **Definir fácilmente** y con certeza a qué proveedor del exterior debe comprar, o si es mejor hacerlo localmente. 
+    
     <mark><span style="font-size: 1.0em;">**✨ Todo eso y más, con la ayuda de nuestro Sistema de Importación con IA 🤖 ✨**</span></mark>
     """, unsafe_allow_html=True)
     
