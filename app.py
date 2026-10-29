@@ -566,8 +566,8 @@ def generar_pdf(productos, gastos_contenedor, config):
         if "🔴" in color:
             txt_semaforo = "ROJO"
             r_col, g_col, b_col = 200, 0, 0
-        elif "🟠" in color:
-            txt_semaforo = "NARANJA"
+        elif "🟡" in color:
+            txt_semaforo = "AMARILLO"
             r_col, g_col, b_col = 220, 130, 0
         else:
             txt_semaforo = "VERDE"
