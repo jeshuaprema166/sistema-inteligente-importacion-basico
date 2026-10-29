@@ -27,7 +27,7 @@ def verificar_acceso():
     * **Definir fácilmente** y con certeza a qué proveedor del exterior debe comprar, o si es mejor hacerlo localmente. 
     
     <div style="text-align: center; margin-top: 15px; margin-bottom: 15px;">
-        <mark><span style="font-size: 1.0em;">**✨ Todo eso y más, con la ayuda de nuestro Sistema de Importación con IA 🤖 ✨**</span></mark>
+        <mark><span style="font-size: 1.0em;"><strong>✨ Todo eso y más, con la ayuda de nuestro Sistema de Importación con IA 🤖 ✨</strong></span></mark>
     </div>
     
     """, unsafe_allow_html=True)
